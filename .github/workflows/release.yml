@@ -1,0 +1,41 @@
+name: Build release downloads
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check native audio processing
+        run: ./scripts/test.sh
+      - name: Build standalone app, DMG and ZIP
+        run: ./scripts/build.sh
+      - name: Verify signature and dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=dist/CallToCodex.app
+          codesign --verify --deep --strict "$app"
+          for binary in "$app/Contents/MacOS/CallToCodex" "$app/Contents/Resources/CallToCodexProcessor" "$app/Contents/Resources/whisper-cli"; do
+            while IFS= read -r dependency; do
+              case "$dependency" in
+                /System/Library/*|/usr/lib/*) ;;
+                *) echo "Unexpected runtime dependency: $dependency" >&2; exit 1 ;;
+              esac
+            done < <(otool -L "$binary" | tail -n +2 | awk '{print $1}')
+          done
+          hdiutil verify dist/CallToCodex-0.3.0-macOS-arm64.dmg
+          cd dist
+          shasum -a 256 -c SHA256SUMS.txt
+      - name: Upload files to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh release view v0.3.0 --json isDraft --jq .isDraft)" = true
+          gh release upload v0.3.0 dist/CallToCodex-0.3.0-macOS-arm64.dmg dist/CallToCodex-0.3.0-macOS-arm64.zip dist/SHA256SUMS.txt --clobber
+          cat dist/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"

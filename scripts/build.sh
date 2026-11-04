@@ -26,7 +26,7 @@ printf '%s  %s\n' "$model_sha" "$cache_dir/$model_name" | shasum -a 256 -c -
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
   "-DCMAKE_C_FLAGS=-ffile-prefix-map=$cache_dir=Dependencies -ffile-prefix-map=$project_dir=CallToCodex" \
   "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$cache_dir=Dependencies -ffile-prefix-map=$project_dir=CallToCodex" \
-  -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_NATIVE=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON
+  -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON
 "$cmake_bin" --build "$build_dir/whisper" --target whisper-cli --parallel "$(sysctl -n hw.ncpu)"
 xcrun swiftc -swift-version 5 -O -target arm64-apple-macosx15.0 -module-cache-path "$build_dir/module-cache" \
   -file-prefix-map "$project_dir=CallToCodex" \
