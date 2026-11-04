@@ -7,6 +7,8 @@
 - License: MIT, included in [LICENSES/whisper.cpp.txt](LICENSES/whisper.cpp.txt).
 - The release bundles a statically linked `whisper-cli`, including its ggml dependencies and embedded Metal code, built from this revision.
 
+The CLI's common audio utilities also include [miniaudio by David Reid](https://github.com/ggml-org/whisper.cpp/blob/4da27c41cebadb3cbbcd2563e9c7cbc8d84bdcad/examples/miniaudio.h) and [stb_vorbis by Sean Barrett](https://github.com/ggml-org/whisper.cpp/blob/4da27c41cebadb3cbbcd2563e9c7cbc8d84bdcad/examples/stb_vorbis.c). Both offer a public-domain/Unlicense option, selected for this distribution.
+
 ## OpenAI Whisper
 
 - Source: https://github.com/openai/whisper
