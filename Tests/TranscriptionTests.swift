@@ -39,7 +39,11 @@ private func process(_ folder: URL, resources: URL) throws -> Int32 {
     let task = Process(); task.executableURL = resources.appendingPathComponent("CallToCodexProcessor")
     task.arguments = ["--session", folder.path, "--resources", resources.path, "--local-only"]
     task.standardOutput = log; task.standardError = log
-    try task.run(); task.waitUntilExit()
+    try task.run()
+    let timeout = DispatchWorkItem { if task.isRunning { task.terminate() } }
+    DispatchQueue.global().asyncAfter(deadline: .now() + 180, execute: timeout)
+    defer { timeout.cancel() }
+    task.waitUntilExit()
     return task.terminationStatus
 }
 
@@ -61,23 +65,25 @@ private func segments(_ folder: URL) throws -> [[String: Any]] {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let padded = root.appendingPathComponent("padded")
-        try FileManager.default.createDirectory(at: padded, withIntermediateDirectories: true)
-        try fixture(padded.appendingPathComponent("original.wav"), speech: speech, noise: false)
-        try check(try process(padded, resources: resources) == 0, "Speech processing failed")
-        let recognized = try segments(padded)
-        let text = recognized.compactMap { $0["text"] as? String }.joined().lowercased()
-        try check(text.contains("country"), "Speech content must survive detection")
-        let markdown = try String(contentsOf: padded.appendingPathComponent("transcript.md"), encoding: .utf8)
-        let marker = try NSRegularExpression(pattern: #"\*\*\[(\d{2}):(\d{2}):(\d{2})\]\*\*"#)
-        let starts = marker.matches(in: markdown, range: NSRange(markdown.startIndex..., in: markdown)).map { match -> Double in
-            let values = (1...3).map { Int((markdown as NSString).substring(with: match.range(at: $0)))! }
-            return Double(values[0] * 3600 + values[1] * 60 + values[2]) * 1000
+        if ProcessInfo.processInfo.environment["CALLTOCODEX_TEST_QUIET_ONLY"] != "1" {
+            let padded = root.appendingPathComponent("padded")
+            try FileManager.default.createDirectory(at: padded, withIntermediateDirectories: true)
+            try fixture(padded.appendingPathComponent("original.wav"), speech: speech, noise: false)
+            try check(try process(padded, resources: resources) == 0, "Speech processing failed")
+            let recognized = try segments(padded)
+            let text = recognized.compactMap { $0["text"] as? String }.joined().lowercased()
+            try check(text.contains("country"), "Speech content must survive detection")
+            let markdown = try String(contentsOf: padded.appendingPathComponent("transcript.md"), encoding: .utf8)
+            let marker = try NSRegularExpression(pattern: #"\*\*\[(\d{2}):(\d{2}):(\d{2})\]\*\*"#)
+            let starts = marker.matches(in: markdown, range: NSRange(markdown.startIndex..., in: markdown)).map { match -> Double in
+                let values = (1...3).map { Int((markdown as NSString).substring(with: match.range(at: $0)))! }
+                return Double(values[0] * 3600 + values[1] * 60 + values[2]) * 1000
+            }
+            let secondStart = (8 + Double(speech.frameLength) / 16000 + 35) * 1000
+            try check(starts.contains { $0 >= 7000 && $0 <= 10000 }, "Leading silence must remain in original timestamps")
+            try check(starts.contains { $0 >= secondStart - 1000 }, "Speech after the long pause must retain its original timestamp: starts=\(starts), second=\(secondStart)")
+            print("PASS: speech retained across a 35-second pause; original timestamps preserved")
         }
-        let secondStart = (8 + Double(speech.frameLength) / 16000 + 35) * 1000
-        try check(starts.contains { $0 >= 7000 && $0 <= 10000 }, "Leading silence must remain in original timestamps")
-        try check(starts.contains { $0 >= secondStart - 1000 }, "Speech after the long pause must retain its original timestamp: starts=\(starts), second=\(secondStart)")
-        print("PASS: speech retained across a 35-second pause; original timestamps preserved")
 
         let quiet = root.appendingPathComponent("quiet")
         try FileManager.default.createDirectory(at: quiet, withIntermediateDirectories: true)

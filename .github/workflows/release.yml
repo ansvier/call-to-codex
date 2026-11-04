@@ -15,7 +15,10 @@ jobs:
         run: ./scripts/test.sh
       - name: Build standalone app, DMG and ZIP
         run: ./scripts/build.sh
-      - name: Check speech detection and original timestamps
+      - name: Check quiet background noise (CPU)
+        env:
+          CALLTOCODEX_TEST_CPU_ONLY: '1'
+          CALLTOCODEX_TEST_QUIET_ONLY: '1'
         run: ./scripts/test-transcription.sh
       - name: Verify signature and dependencies
         shell: bash

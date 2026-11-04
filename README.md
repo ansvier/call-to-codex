@@ -108,6 +108,8 @@ dist/SHA256SUMS.txt
 
 After building, `./scripts/test-transcription.sh` checks speech detection, quiet background noise and timestamps against the public JFK sample from the whisper.cpp source checkout.
 
+On headless runners, `CALLTOCODEX_TEST_CPU_ONLY=1 CALLTOCODEX_TEST_QUIET_ONLY=1 ./scripts/test-transcription.sh` runs the noise-only regression without GPU acceleration. The signed app bundle is left untouched.
+
 The default signature is ad-hoc. `CALLTOCODEX_SIGN_IDENTITY` can select an installed Developer ID identity for the app signature; notarization is a separate release step. Caches live in `.cache/` and build files in `.build/`. `CALLTOCODEX_CMAKE` and `CALLTOCODEX_CACHE_DIR` can override the tool and cache locations.
 
 `./scripts/demo.sh` opens a separate preview with synthetic calls for documentation screenshots. Its recording button does not capture audio. The preview exports its first window image automatically; **Save Demo Screenshot** in its app menu exports another. Real call history is not used.
