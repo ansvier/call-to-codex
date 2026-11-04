@@ -1,0 +1,19 @@
+name: Native macOS checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test native audio decoding and mixing
+        run: ./scripts/test.sh
+      - name: Compile app and processor
+        run: |
+          xcrun swiftc -swift-version 5 -O -target arm64-apple-macosx15.0 Sources/CallToCodex.swift -o .build/CallToCodex
+          xcrun swiftc -swift-version 5 -O -target arm64-apple-macosx15.0 Sources/AudioPreparation.swift Sources/Processor.swift -o .build/CallToCodexProcessor
+      - name: Validate metadata
+        run: plutil -lint Info.plist CallToCodex.entitlements
