@@ -7,6 +7,9 @@ signing_identity="${CALLTOCODEX_SIGN_IDENTITY:--}"
 whisper_commit="4da27c41cebadb3cbbcd2563e9c7cbc8d84bdcad"
 model_sha="394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"
 model_name="ggml-large-v3-turbo-q5_0.bin"
+vad_name="ggml-silero-v6.2.0.bin"
+vad_revision="9ffd54a1e1ee413ddf265af9913beaf518d1639b"
+vad_sha="2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
   echo "This release builds on Apple Silicon macOS." >&2; exit 1
 fi
@@ -17,11 +20,21 @@ if [[ ! -d "$cache_dir/whisper.cpp/.git" ]]; then
   git clone https://github.com/ggml-org/whisper.cpp.git "$cache_dir/whisper.cpp"
 fi
 git -C "$cache_dir/whisper.cpp" checkout --detach "$whisper_commit"
+speech_patch="$project_dir/patches/whisper-vad-json.patch"
+if ! git -C "$cache_dir/whisper.cpp" apply --reverse --check "$speech_patch" 2>/dev/null; then
+  git -C "$cache_dir/whisper.cpp" apply --check "$speech_patch"
+  git -C "$cache_dir/whisper.cpp" apply "$speech_patch"
+fi
 if [[ ! -f "$cache_dir/$model_name" ]]; then
   curl -fL --retry 3 "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$model_name" -o "$cache_dir/$model_name.part"
   mv "$cache_dir/$model_name.part" "$cache_dir/$model_name"
 fi
 printf '%s  %s\n' "$model_sha" "$cache_dir/$model_name" | shasum -a 256 -c -
+if [[ ! -f "$cache_dir/$vad_name" ]]; then
+  curl -fL --retry 3 "https://huggingface.co/ggml-org/whisper-vad/resolve/$vad_revision/$vad_name" -o "$cache_dir/$vad_name.part"
+  mv "$cache_dir/$vad_name.part" "$cache_dir/$vad_name"
+fi
+printf '%s  %s\n' "$vad_sha" "$cache_dir/$vad_name" | shasum -a 256 -c -
 "$cmake_bin" -S "$cache_dir/whisper.cpp" -B "$build_dir/whisper" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DCMAKE_OSX_ARCHITECTURES=arm64 \
   "-DCMAKE_C_FLAGS=-ffile-prefix-map=$cache_dir=Dependencies -ffile-prefix-map=$project_dir=CallToCodex" \
@@ -47,6 +60,7 @@ cp "$build_dir/CallToCodex" "$app/Contents/MacOS/CallToCodex"
 cp "$build_dir/CallToCodexProcessor" "$app/Contents/Resources/CallToCodexProcessor"
 cp "$build_dir/whisper/bin/whisper-cli" "$app/Contents/Resources/whisper-cli"
 cp "$cache_dir/$model_name" "$app/Contents/Resources/$model_name"
+cp "$cache_dir/$vad_name" "$app/Contents/Resources/$vad_name"
 cp "$build_dir/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 cp "$project_dir/LICENSE" "$app/Contents/Resources/Licenses/CallToCodex.txt"
 cp "$project_dir/LICENSES/"*.txt "$app/Contents/Resources/Licenses/"

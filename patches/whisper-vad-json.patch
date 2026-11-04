@@ -1,0 +1,19 @@
+diff --git a/examples/cli/cli.cpp b/examples/cli/cli.cpp
+index 16f50c0..68cb09a 100644
+--- a/examples/cli/cli.cpp
++++ b/examples/cli/cli.cpp
+@@ -736,6 +736,14 @@ static void output_json(
+         start_obj("result");
+             value_s("language", whisper_lang_str(whisper_full_lang_id(ctx)), true);
+         end_obj(false);
++        start_arr("speech_regions");
++            const int n_speech_regions = whisper_full_n_vad_segments(ctx);
++            for (int i = 0; i < n_speech_regions; ++i) {
++                start_obj(nullptr);
++                    times_o(whisper_full_get_vad_segment_t0(ctx, i), whisper_full_get_vad_segment_t1(ctx, i), true);
++                end_obj(i == n_speech_regions - 1);
++            }
++        end_arr(false);
+         start_arr("transcription");
+ 
+             const int n_segments = whisper_full_n_segments(ctx);

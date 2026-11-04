@@ -60,6 +60,12 @@ private func timestamp(_ milliseconds: Int) -> String {
 
 private func makeTranscript(_ recognition: [String: Any], meta: [String: Any]) throws -> String {
     let segments = recognition["transcription"] as? [[String: Any]] ?? []
+    let speechRegions = (recognition["speech_regions"] as? [[String: Any]] ?? []).compactMap { region -> (from: Int, to: Int)? in
+        guard let offsets = region["offsets"] as? [String: Any],
+              let from = offsets["from"] as? NSNumber, let to = offsets["to"] as? NSNumber,
+              to.intValue > from.intValue else { return nil }
+        return (from.intValue, to.intValue)
+    }
     var lines = ["# " + (meta["title"] as? String ?? "Call"), "", "Date: " + (meta["created_at"] as? String ?? ""), "",
                  "Automatic local transcription. Recognition errors are possible.",
                  "Timestamps are relative to the start of the recording. Individual speakers are not identified.", "", "## Conversation", ""]
@@ -68,7 +74,20 @@ private func makeTranscript(_ recognition: [String: Any], meta: [String: Any]) t
         let text = (segment["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { continue }
         let offsets = segment["offsets"] as? [String: Any] ?? [:]
-        lines += ["**[\(timestamp((offsets["from"] as? NSNumber)?.intValue ?? 0))]** \(text)", ""]
+        var from = (offsets["from"] as? NSNumber)?.intValue ?? 0
+        let to = (offsets["to"] as? NSNumber)?.intValue ?? from
+        // A decoder segment may start at the previous phrase's end before a
+        // removed pause. Anchor it to its first actual speech region instead.
+        let overlapping = speechRegions.filter { $0.to > from && $0.from < to }
+        if let speech = overlapping.first {
+            // VAD adds 200 ms of padding after a phrase. A decoder may put the
+            // next segment in that padding before a long removed pause.
+            if overlapping.count > 1, speech.to - from <= 200,
+               overlapping[1].from - speech.to >= 500 {
+                from = max(from, overlapping[1].from)
+            } else { from = max(from, speech.from) }
+        }
+        lines += ["**[\(timestamp(from))]** \(text)", ""]
         count += 1
     }
     guard count > 0 else { throw ProcessingError.message("No speech was recognized. The audio is saved; check the levels and retry.") }
@@ -129,7 +148,7 @@ private func nameChat(codex: URL, folder: URL, meta: [String: Any]) {
             }
             throw ProcessingError.message("Timed out while naming the chat.")
         }
-        try send(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "call_to_codex", "version": "0.3.0"]]])
+        try send(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "call_to_codex", "version": "0.3.1"]]])
         try response(1)
         try send(["method": "initialized", "params": [:] as [String: Any]])
         try send(["id": 2, "method": "thread/name/set", "params": ["threadId": threadID, "name": meta["title"] as? String ?? "Call"]])
@@ -210,13 +229,16 @@ private func summarize(folder: URL, meta: inout [String: Any], codex: URL) throw
                 if args.contains("--prepare-only") { emit("done", ["frames": audio.frames, "peak": audio.peak]); return }
                 emit("transcribing")
                 let model = resources.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin")
+                let vad = resources.appendingPathComponent("ggml-silero-v6.2.0.bin")
                 let whisper = resources.appendingPathComponent("whisper-cli")
-                guard FileManager.default.fileExists(atPath: model.path), FileManager.default.isExecutableFile(atPath: whisper.path) else {
+                guard FileManager.default.fileExists(atPath: model.path), FileManager.default.fileExists(atPath: vad.path), FileManager.default.isExecutableFile(atPath: whisper.path) else {
                     throw ProcessingError.message("The bundled transcription model or engine is missing. Reinstall CallToCodex.")
                 }
                 let prefix = folder.appendingPathComponent("recognition")
                 try runLogged(whisper, arguments: ["-m", model.path, "-f", folder.appendingPathComponent("audio.wav").path,
-                    "-l", "auto", "-t", "6", "-oj", "-of", prefix.path, "--suppress-nst", "--no-prints"],
+                    "-l", "auto", "-t", "6", "-oj", "-of", prefix.path,
+                    "--vad", "--vad-model", vad.path, "--vad-min-silence-duration-ms", "500", "--vad-speech-pad-ms", "200",
+                    "--suppress-nst", "--no-prints"],
                     log: folder.appendingPathComponent("recognition.log"))
                 guard let recognition = try JSONSerialization.jsonObject(with: Data(contentsOf: prefix.appendingPathExtension("json"))) as? [String: Any] else {
                     throw ProcessingError.message("The transcription engine returned an invalid result.")

@@ -7,7 +7,7 @@
 <p align="center">A tiny native Mac call recorder with a classic, Winamp-inspired interface.<br>Local transcription → a fresh Codex chat with a TL;DR and a Markdown transcript.</p>
 
 <p align="center">
-  <a href="https://github.com/ansvier/call-to-codex/releases/tag/v0.3.0">Download for Mac</a> ·
+  <a href="https://github.com/ansvier/call-to-codex/releases/tag/v0.3.1">Download for Mac</a> ·
   <a href="#getting-started">Getting started</a> ·
   <a href="#build-from-source">Build from source</a>
 </p>
@@ -27,7 +27,7 @@
 ## What it does
 
 - Records your microphone and the Mac's system audio, independently of the meeting app.
-- Transcribes on your Mac using bundled whisper.cpp and Whisper large-v3-turbo Q5.
+- Detects speech locally with Silero VAD, then transcribes it with bundled whisper.cpp and Whisper large-v3-turbo Q5.
 - Sends the transcript text to Codex and creates a separate chat for each call.
 - Produces a short summary in the conversation's language, plus a timestamped `transcript.md`.
 - Keeps a call playlist with shortcuts to the chat, transcript and local folder.
@@ -40,7 +40,7 @@ No meeting bot, browser extension, Python, FFmpeg or separate transcription serv
 
 **Requirements:** an Apple Silicon Mac, macOS 15 or later, and a signed-in Codex installation. The app also recognizes the Codex CLI bundled with the ChatGPT desktop app. A separately installed `codex` CLI works too.
 
-1. Download the **DMG** from [Releases](https://github.com/ansvier/call-to-codex/releases/tag/v0.3.0), open it and drag **CallToCodex** into **Applications**.
+1. Download the **DMG** from [Releases](https://github.com/ansvier/call-to-codex/releases/tag/v0.3.1), open it and drag **CallToCodex** into **Applications**.
 2. Launch it from Applications. This early release is ad-hoc signed and **not notarized by Apple**. macOS may block the first launch; if you trust this download, follow Apple's [Open Anyway instructions](https://support.apple.com/en-us/102445). Future Developer ID signing and notarization are still pending.
 3. Allow **Microphone** and **Screen & System Audio Recording** in System Settings → Privacy & Security. Quit and reopen CallToCodex after changing system audio permission.
 4. Choose your microphone. **MIC CHECK · 8 SEC** tests your voice without saving audio; **AUDIO ACCESS** checks the system capture permission.
@@ -80,7 +80,7 @@ Deleting a call moves its whole local folder to Trash. **UNDO** restores the las
 
 - System capture includes other app audio that plays during the recording, such as notifications. It does not save screen images.
 - Transcription uses the mixed track. There is no speaker diarization or reliable speaker labeling yet.
-- Recognition is automatic and may miss words, especially with overlapping voices. Check the transcript for important details.
+- Recognition is automatic and may miss words or invent phrases. Local speech detection reduces hallucinations from silence, but cannot eliminate them, especially with background voices or overlapping speech. Check the transcript for important details.
 - Intel Macs are not supported by the downloadable build. The current UI is English; spoken language and summaries can be multilingual.
 - Direct Codex integration depends on its installed CLI and desktop chat links. A future Codex update may require an app update.
 
@@ -97,14 +97,16 @@ cd call-to-codex
 ./scripts/build.sh
 ```
 
-The build downloads the pinned whisper.cpp source and speech model, verifies the model's SHA-256, compiles the native app and processor, and creates:
+The build downloads the pinned whisper.cpp source and speech models, verifies their SHA-256 checksums, compiles the native app and processor, and creates:
 
 ```text
 dist/CallToCodex.app
-dist/CallToCodex-0.3.0-macOS-arm64.dmg
-dist/CallToCodex-0.3.0-macOS-arm64.zip
+dist/CallToCodex-0.3.1-macOS-arm64.dmg
+dist/CallToCodex-0.3.1-macOS-arm64.zip
 dist/SHA256SUMS.txt
 ```
+
+After building, `./scripts/test-transcription.sh` checks speech detection, quiet background noise and timestamps against the public JFK sample from the whisper.cpp source checkout.
 
 The default signature is ad-hoc. `CALLTOCODEX_SIGN_IDENTITY` can select an installed Developer ID identity for the app signature; notarization is a separate release step. Caches live in `.cache/` and build files in `.build/`. `CALLTOCODEX_CMAKE` and `CALLTOCODEX_CACHE_DIR` can override the tool and cache locations.
 
@@ -118,6 +120,6 @@ Bug reports and pull requests are welcome. Please describe your macOS version, M
 
 ## License & credits
 
-CallToCodex is [MIT licensed](LICENSE). The bundled [whisper.cpp](https://github.com/ggml-org/whisper.cpp) engine and [OpenAI Whisper](https://github.com/openai/whisper) model are MIT licensed too; see [third-party notices](THIRD_PARTY_NOTICES.md).
+CallToCodex is [MIT licensed](LICENSE). The bundled [whisper.cpp](https://github.com/ggml-org/whisper.cpp) engine, [OpenAI Whisper](https://github.com/openai/whisper) model and [Silero VAD](https://github.com/snakers4/silero-vad) model are MIT licensed too; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 An independent project inspired by classic desktop audio players. Not affiliated with OpenAI or Winamp. The app icon and interface artwork are original.

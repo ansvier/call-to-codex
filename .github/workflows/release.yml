@@ -9,10 +9,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - name: Read release version
+        run: echo "CALLTOCODEX_RELEASE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)" >> "$GITHUB_ENV"
       - name: Check native audio processing
         run: ./scripts/test.sh
       - name: Build standalone app, DMG and ZIP
         run: ./scripts/build.sh
+      - name: Check speech detection and original timestamps
+        run: ./scripts/test-transcription.sh
       - name: Verify signature and dependencies
         shell: bash
         run: |
@@ -27,7 +31,7 @@ jobs:
               esac
             done < <(otool -L "$binary" | tail -n +2 | awk '{print $1}')
           done
-          hdiutil verify dist/CallToCodex-0.3.0-macOS-arm64.dmg
+          hdiutil verify "dist/CallToCodex-$CALLTOCODEX_RELEASE_VERSION-macOS-arm64.dmg"
           cd dist
           shasum -a 256 -c SHA256SUMS.txt
       - name: Upload files to draft release
@@ -36,6 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh release view v0.3.0 --json isDraft --jq .isDraft)" = true
-          gh release upload v0.3.0 dist/CallToCodex-0.3.0-macOS-arm64.dmg dist/CallToCodex-0.3.0-macOS-arm64.zip dist/SHA256SUMS.txt --clobber
+          release_tag="v$CALLTOCODEX_RELEASE_VERSION"
+          test "$(gh release view "$release_tag" --json isDraft --jq .isDraft)" = true
+          gh release upload "$release_tag" "dist/CallToCodex-$CALLTOCODEX_RELEASE_VERSION-macOS-arm64.dmg" "dist/CallToCodex-$CALLTOCODEX_RELEASE_VERSION-macOS-arm64.zip" dist/SHA256SUMS.txt --clobber
           cat dist/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
